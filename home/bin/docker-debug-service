@@ -1,0 +1,37 @@
+#!/bin/bash
+set -e -u
+
+# Grab the last argument as the service name
+DOCKER_ARGS=''
+
+while [ $# -gt 1 ]; do
+	DOCKER_ARGS="$DOCKER_ARGS $1"
+	shift
+done
+
+SERVICE_NAME="$1"
+
+SERVICE_JSON="$(docker ${DOCKER_ARGS[*]} service inspect $SERVICE_NAME)"
+
+get_env_vars() {
+	echo $SERVICE_JSON | jq -r ".[0].Spec.TaskTemplate.ContainerSpec.Env | join(\"' -e '\")"
+}
+
+ENV_VARS=(-e "'$(get_env_vars)'")
+
+get_ports() {
+	echo $SERVICE_JSON | jq -r ".[0].Spec.EndpointSpec.Ports | map(\"\(.PublishedPort):\(.TargetPort)\") | join(\" -p \")"
+}
+
+PORTS=(-p "$(get_ports)")
+
+get_image_name() {
+	echo $SERVICE_JSON | jq -r ".[0].Spec.TaskTemplate.ContainerSpec.Image"
+}
+
+get_name() {
+	echo $SERVICE_JSON | jq -r ".[0].Spec.Name"
+}
+
+echo "To run the container:"
+echo "docker run -d --name $(get_name) ${ENV_VARS[*]} ${PORTS[*]} $(get_image_name)"
